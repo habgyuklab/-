@@ -2,8 +2,8 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>합격랩 퍼펙트 관제 시스템 (v12)</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <title>합격랩 퍼펙트 관제 시스템 (v13 메모기능)</title>
     <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
     <style>
         :root {
@@ -20,8 +20,10 @@
         body {
             font-family: 'Pretendard', 'Malgun Gothic', sans-serif;
             background-color: var(--bg-color);
-            margin: 0; padding: 0; height: 100vh;
-            display: flex; flex-direction: column; overflow: hidden; user-select: none;
+            margin: 0; padding: 0; min-height: 100vh; /* 줌을 위해 min-height로 변경 */
+            display: flex; flex-direction: column; 
+            /* overflow: hidden;  <-- 줌을 위해 제거 */ 
+            user-select: none;
         }
 
         /* 시작 오버레이 */
@@ -41,7 +43,7 @@
         .header-logo img { height: 50px; }
         .header-clock { font-size: 1.4rem; font-weight: bold; color: #333; background: #f1f3f5; padding: 5px 20px; border-radius: 20px; }
 
-        .main-wrapper { display: flex; flex: 1; overflow: hidden; }
+        .main-wrapper { display: flex; flex: 1; height: calc(100vh - 70px); }
         .seat-area { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; align-items: center; }
         .sidebar { width: var(--sidebar-width); background: white; border-left: 1px solid #ddd; display: flex; flex-direction: column; box-shadow: -2px 0 10px rgba(0,0,0,0.05); }
         .sidebar-header { padding: 15px; background: #343a40; color: white; font-weight: bold; text-align: center; font-size: 1.1rem; }
@@ -111,7 +113,6 @@
         .btn-high { background-color: #7048e8; }
         .btn-nsu { background-color: #1098ad; }
 
-        /* 학생 정보 입력 영역 */
         .info-grid {
             display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 20px; 
             background: #f8f9fa; padding: 15px; border-radius: 10px; border: 1px solid #eee;
@@ -120,24 +121,22 @@
         .info-group label { font-size: 12px; color: #666; margin-bottom: 4px; font-weight: bold; }
         .info-group input { padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-size: 14px; text-align: center; width: 100%; box-sizing: border-box; }
         
-        /* 시간표 스타일 수정 (요청사항 반영) */
         .schedule-table { width: 100%; border-collapse: collapse; text-align: center; font-size: 13px; margin-bottom: 20px;}
         .schedule-table th, .schedule-table td { border: 1px solid #dee2e6; padding: 4px; vertical-align: top;}
-        
-        /* [수정] 1열(교시) 너비 및 폰트 확장 */
-        .schedule-table th:first-child, .schedule-table td:first-child {
-            width: 140px; 
-            min-width: 140px;
-            font-size: 15px; 
-            font-weight: bold;
-            background-color: #f1f3f5;
-            vertical-align: middle;
-        }
-        
+        .schedule-table th:first-child, .schedule-table td:first-child { width: 140px; min-width: 140px; font-size: 15px; font-weight: bold; background-color: #f1f3f5; vertical-align: middle; }
         .schedule-table th { background: #f8f9fa; position: sticky; top: 0; padding: 10px;}
-        .schedule-table input[type="time"] { width: 100%; border: 1px solid #ddd; padding: 4px; text-align: center; box-sizing: border-box; cursor: pointer; margin-bottom: 4px;}
+        
+        /* 인풋 스타일 */
+        .schedule-table input[type="time"] { width: 100%; border: 1px solid #ddd; padding: 4px; text-align: center; box-sizing: border-box; cursor: pointer; margin-bottom: 2px;}
+        .schedule-table input.memo-input { 
+            width: 100%; border: none; border-bottom: 1px dashed #ccc; padding: 2px; 
+            text-align: center; font-size: 12px; color: #666; background: transparent; margin-bottom: 4px;
+        }
+        .schedule-table input.memo-input:focus { outline: none; border-bottom: 1px solid #000; }
+
         .input-basic { background-color: #d3f9d8 !important; border: 1px solid #b2f2bb !important; font-weight: bold; color: #0b7285;}
         .input-custom { background-color: #ffe8cc !important; border: 1px solid #ffc078 !important; font-weight: bold; color: #d9480f;}
+        
         .btn-toggle-exempt { display: block; width: 100%; padding: 3px; font-size: 11px; cursor: pointer; border-radius: 3px; border: 1px solid #ccc; background-color: #f8f9fa; color: #666; }
         .btn-toggle-exempt.active { background-color: #495057; color: #fff; border-color: #343a40; }
         
@@ -148,38 +147,33 @@
         .btn-print { background: #343a40; color: white; margin-right: 10px; }
         .btn-img { background: #12b886; color: white; margin-right: 10px; }
 
-        /* --- 캡처/인쇄 모드 스타일 (잘림 방지 및 스타일 최적화) --- */
+        /* --- 캡처/인쇄 모드 스타일 --- */
         .capture-mode #schedule-modal {
             position: fixed !important; top: 0 !important; left: 0 !important;
-            width: 1200px !important; /* 강제 넓이 지정 */
-            height: auto !important; max-height: none !important;
+            width: 1200px !important; height: auto !important; max-height: none !important;
             overflow: visible !important; border-radius: 0 !important; box-shadow: none !important; padding: 40px !important;
-            background: white !important; z-index: 10000 !important;
-            transform: none !important; margin: 0 !important;
+            background: white !important; z-index: 10000 !important; transform: none !important; margin: 0 !important;
         }
-        
-        /* 캡처 시 불필요한 요소 숨김 */
         .capture-mode .modal-actions, .capture-mode .preset-area, .capture-mode .btn-toggle-exempt, .capture-mode p { display: none !important; }
-        
-        /* 캡처 시 인풋 박스를 텍스트처럼 보이게 */
         .capture-mode .info-grid { border: 2px solid #333; background: white; }
         .capture-mode .info-group input { border: none !important; background: transparent !important; font-weight: bold; font-size: 16px; padding: 0; }
         .capture-mode .schedule-table th, .capture-mode .schedule-table td { border: 1px solid #000 !important; padding: 8px !important; }
         
-        .print-text-span { display: block; font-weight: bold; font-size: 14px; padding: 10px 0; }
-        
-        /* 인쇄 색상: 심플 모드 */
-        .capture-mode .cell-green { background-color: #51cf66 !important; color: transparent !important; } 
+        /* 인쇄 텍스트 스팬 */
+        .print-text-span { display: block; font-weight: bold; font-size: 16px; padding: 5px 0; }
+        .print-memo-span { display: block; font-size: 12px; font-weight: normal; color: #333; }
+
+        /* 인쇄 색상 로직 */
+        .capture-mode .cell-green { background-color: #51cf66 !important; } 
+        .capture-mode .cell-green .print-text-span { display: none; } /* 기본시간 텍스트 숨김 */
         .capture-mode .cell-green-text { background-color: #51cf66 !important; color: black !important; } 
         .capture-mode .cell-red { background-color: #ff6b6b !important; color: white !important; } 
+        .capture-mode .cell-red .print-memo-span { display: none; } /* 면제 시 메모 숨김 (선택사항) */
 
-        /* 인쇄 시 헤더 등 숨김 */
         @media print {
             body > * { visibility: hidden; }
             #schedule-modal, #schedule-modal * { visibility: visible; }
-            #schedule-modal { 
-                position: absolute; left: 0; top: 0; width: 100%; height: auto; overflow: visible; 
-            }
+            #schedule-modal { position: absolute; left: 0; top: 0; width: 100%; height: auto; overflow: visible; }
         }
         #file-input { display: none; }
     </style>
@@ -205,7 +199,7 @@
                 <button class="btn-ctrl reset-btn" onclick="resetGreenSeats()">🔄 퇴실 처리</button>
                 <button class="btn-ctrl backup-btn" onclick="downloadBackup()">💾 데이터 백업</button>
                 <button class="btn-ctrl restore-btn" onclick="triggerRestore()">📂 백업 불러오기</button>
-                <input type="file" id="file-input" accept=".txt, .json" onchange="loadBackup(this)">
+                <input type="file" id="file-input" accept="*/*" onchange="loadBackup(this)">
             </div>
             <div style="font-size:12px; color:#888; margin-bottom: 20px;">
                 💡 <b>안내:</b> 인쇄 시 자동으로 포맷이 변환되어 글자가 잘리지 않고 깔끔하게 출력됩니다.
@@ -264,7 +258,7 @@
         </div>
 
         <p style="text-align:center; font-size:12px; color:#666; margin-top:0;">
-            빈칸: 기본시간 적용 | 더블클릭: 기본값 입력 | 버튼: <b>[입실안함]</b> 설정
+            빈칸: 기본시간 적용 | <b>[메모]</b>는 인쇄 시 괄호 안에 표시됩니다.
         </p>
         <table class="schedule-table">
             <thead><tr><th>교시</th><th>일</th><th>월</th><th>화</th><th>수</th><th>목</th><th>금</th><th>토</th></tr></thead>
@@ -284,7 +278,6 @@
 
     <script>
         const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
-        // [수정] 1교시 시간 변경
         const PERIODS = [
             { name: "1교시", start: "08:00", end: "09:10" }, 
             { name: "2교시", start: "09:20", end: "10:40" },
@@ -314,45 +307,40 @@
             document.body.addEventListener('click', stopAlarm);
         }
 
+        // --- 데이터 로드 (v13 - 메모 추가) ---
         function loadData() {
-            const v8 = localStorage.getItem('studyRoom_v8_final');
-            if (v8) {
-                seatsData = JSON.parse(v8);
+            const v13 = localStorage.getItem('studyRoom_v13_memo');
+            if (v13) {
+                seatsData = JSON.parse(v13);
             } else {
-                const v7 = localStorage.getItem('studyRoom_v7_final');
-                if (v7) {
-                    seatsData = JSON.parse(v7);
-                    for (const id in seatsData) { if (!seatsData[id].info) seatsData[id].info = { period: '', locker: '', phone: '' }; }
+                // 이전 데이터 마이그레이션
+                const v8 = localStorage.getItem('studyRoom_v8_final');
+                if (v8) {
+                    seatsData = JSON.parse(v8);
+                    for (const id in seatsData) {
+                        if (!seatsData[id].memoGrid) seatsData[id].memoGrid = {}; // 메모 그리드 추가
+                    }
                     saveData();
                 } else {
-                    const v6 = localStorage.getItem('studyRoom_v6_x_default');
-                    if(v6) {
-                        seatsData = JSON.parse(v6);
-                        for (const id in seatsData) {
-                            if (!seatsData[id].exemptGrid) seatsData[id].exemptGrid = {};
-                            if (!seatsData[id].info) seatsData[id].info = { period: '', locker: '', phone: '' };
-                        }
-                        saveData();
-                    } else {
-                        initData('P', 15); initData('S', 160);
-                    }
+                    initData('P', 15); initData('S', 160);
                 }
             }
         }
-        function saveData() { localStorage.setItem('studyRoom_v8_final', JSON.stringify(seatsData)); }
+        function saveData() { localStorage.setItem('studyRoom_v13_memo', JSON.stringify(seatsData)); }
         function initData(prefix, count) {
             for (let i = 1; i <= count; i++) {
                 const id = `${prefix}-${i}`;
                 if (!seatsData[id]) { 
                     seatsData[id] = { 
                         id: id, name: 'X', state: 0, 
-                        scheduleGrid: {}, scheduleV3: {}, penaltyInfo: null, exemptGrid: {},
+                        scheduleGrid: {}, memoGrid: {}, scheduleV3: {}, penaltyInfo: null, exemptGrid: {},
                         info: { period: '', locker: '', phone: '' } 
                     }; 
                 }
             }
         }
 
+        // --- 기능 함수들 ---
         function checkPeriodOnLoad() {
             const now = new Date();
             const currentHM = String(now.getHours()).padStart(2,'0') + ":" + String(now.getMinutes()).padStart(2,'0');
@@ -494,67 +482,67 @@
             const rows = document.getElementById('schedule-tbody').rows;
             for(let r=0; r<rows.length; r++) {
                 const cells = rows[r].cells;
-                // 첫번째 컬럼(교시)에 텍스트 넣기
                 cells[0].innerText = `${PERIODS[r].name}\n${PERIODS[r].start}~${PERIODS[r].end}`;
                 
                 for(let c=1; c<cells.length; c++) {
                     const cell = cells[c];
-                    const input = cell.querySelector('input');
+                    const input = cell.querySelector('input[type="time"]');
+                    const memoInput = cell.querySelector('input.memo-input');
                     const btn = cell.querySelector('button');
                     const defaultTime = PERIODS[r].start;
-                    cell.className = '';
-                    const span = document.createElement('span');
-                    span.className = 'print-text-span';
+                    
+                    cell.className = ''; 
+                    const spanText = document.createElement('span');
+                    spanText.className = 'print-text-span';
+                    const spanMemo = document.createElement('span');
+                    spanMemo.className = 'print-memo-span';
+                    
+                    const memoVal = memoInput.value ? `(${memoInput.value})` : "";
                     
                     if (btn.dataset.exempt === 'true') {
                         cell.classList.add('cell-red');
-                        span.textContent = "입실안함";
-                        span.style.color = "white";
+                        spanText.textContent = "입실안함";
+                        spanText.style.color = "white";
                     } else {
                         if (input.value && input.value !== defaultTime) {
+                            // 커스텀 시간
                             cell.classList.add('cell-green-text');
-                            span.textContent = input.value + " 입실";
+                            spanText.textContent = input.value + " 입실";
+                            spanMemo.textContent = memoVal;
                         } else {
+                            // 기본 시간
                             cell.classList.add('cell-green');
-                            span.textContent = ""; 
+                            spanText.textContent = ""; 
+                            spanMemo.textContent = memoVal; // 기본시간일 때도 메모가 있으면 표시
                         }
                     }
                     input.style.display = 'none';
-                    cell.appendChild(span);
+                    memoInput.style.display = 'none';
+                    cell.appendChild(spanText);
+                    cell.appendChild(spanMemo);
                 }
             }
             document.body.classList.add('capture-mode');
-            
-            // 캡처 모드에서 로고 및 하단 여백 확보를 위해 모달 크기 강제 조정
             const modal = document.getElementById('schedule-modal');
             modal.style.width = "1200px";
         }
 
         function cleanupAfterPrintOrSave() {
             document.body.classList.remove('capture-mode');
-            const spans = document.querySelectorAll('.print-text-span');
+            const spans = document.querySelectorAll('.print-text-span, .print-memo-span');
             spans.forEach(span => span.remove());
             const inputs = document.querySelectorAll('#schedule-tbody input');
             inputs.forEach(input => input.style.display = '');
-            const rows = document.getElementById('schedule-tbody').rows;
-            for(let r=0; r<rows.length; r++) {
-                const cells = rows[r].cells;
-                cells[0].innerText = ""; // 교시 텍스트 복구 (기존엔 CSS가 아님) -> 아니, 기존엔 TD였음. 
-                // 기존엔 TD 안에 아무것도 없었나? 아님.
-                // 아 원래 PERIODS 루프에서 innerHTML로 넣었었음. 복구 필요.
-            }
-            // 테이블 다시 그리기 (간편 복구)
             openScheduleModal(selectedSeatId);
         }
 
         function saveAsImage() {
             prepareForPrintOrSave();
             const modalContent = document.querySelector("#schedule-modal");
-            // html2canvas 옵션: 화면 밖 요소도 캡처
             html2canvas(modalContent, {
-                scale: 2, // 고해상도
+                scale: 2, 
                 useCORS: true,
-                windowWidth: 1400, // 가상 화면 너비
+                windowWidth: 1400, 
             }).then(canvas => {
                 const link = document.createElement("a");
                 document.body.appendChild(link);
@@ -589,7 +577,7 @@
                 for(let c=1; c<cells.length; c++) {
                     const dayIdx = c - 1; const periodIdx = r;
                     const btn = cells[c].querySelector('button');
-                    const input = cells[c].querySelector('input');
+                    const input = cells[c].querySelector('input[type="time"]');
                     const defaultTime = PERIODS[periodIdx].start;
                     const shouldExempt = isExemptFunc(dayIdx, periodIdx);
                     if (shouldExempt) {
@@ -604,8 +592,10 @@
 
         function openScheduleModal(id) {
             const data = seatsData[id]; const tbody = document.getElementById('schedule-tbody'); tbody.innerHTML = '';
-            if(!data.scheduleGrid) data.scheduleGrid = {}; if(!data.exemptGrid) data.exemptGrid = {}; 
-            
+            if(!data.scheduleGrid) data.scheduleGrid = {}; 
+            if(!data.exemptGrid) data.exemptGrid = {}; 
+            if(!data.memoGrid) data.memoGrid = {}; // 메모 초기화
+
             document.getElementById('info-name').value = data.name === 'X' ? '' : data.name;
             document.getElementById('info-seat').value = data.name === 'X' ? id : data.name; 
             if(!data.info) data.info = { period: '', locker: '', phone: '' };
@@ -616,7 +606,6 @@
             PERIODS.forEach((p, idx) => {
                 const tr = document.createElement('tr');
                 const th = document.createElement('td'); 
-                // [수정] 교시 칸 디자인
                 th.innerHTML = `<div style="display:flex; flex-direction:column; justify-content:center; height:100%;">
                                     <span style="font-size:16px;">${p.name}</span>
                                     <span style="font-size:13px; color:#555; margin-top:4px;">${p.start} ~ ${p.end}</span>
@@ -625,6 +614,8 @@
                 tr.appendChild(th);
                 for(let d=0; d<7; d++) {
                     const td = document.createElement('td'); const key = `${d}-${idx}`; 
+                    
+                    // 시간 입력
                     const input = document.createElement('input'); input.type = 'time'; input.dataset.day = d; input.dataset.period = idx;
                     let val = data.scheduleGrid[key] || ""; input.value = val; input.placeholder = p.start;
                     if(val) updateColor(input, p.start);
@@ -636,6 +627,13 @@
                         updateColor(this, p.start);
                     };
                     input.ondblclick = function(){ this.value = p.start; updateColor(this, p.start); };
+                    
+                    // 메모 입력 (NEW)
+                    const memo = document.createElement('input'); 
+                    memo.type = 'text'; memo.className = 'memo-input'; memo.placeholder = '메모';
+                    memo.value = data.memoGrid[key] || "";
+
+                    // 입실안함 버튼
                     const btn = document.createElement('button'); const isExempt = data.exemptGrid[key]; 
                     btn.className = isExempt ? 'btn-toggle-exempt active' : 'btn-toggle-exempt';
                     btn.textContent = isExempt ? '입실안함 끄기' : '입실안함';
@@ -647,7 +645,11 @@
                             this.classList.add('active'); this.textContent = '입실안함 끄기'; this.dataset.exempt = 'true'; 
                         }
                     };
-                    td.appendChild(input); td.appendChild(btn); tr.appendChild(td);
+                    
+                    td.appendChild(input); 
+                    td.appendChild(memo); 
+                    td.appendChild(btn); 
+                    tr.appendChild(td);
                 }
                 tbody.appendChild(tr);
             });
@@ -656,7 +658,7 @@
 
         function saveSchedule() {
             const data = seatsData[selectedSeatId]; 
-            data.scheduleGrid = {}; data.scheduleV3 = {}; data.exemptGrid = {}; 
+            data.scheduleGrid = {}; data.scheduleV3 = {}; data.exemptGrid = {}; data.memoGrid = {};
             
             const newName = document.getElementById('info-name').value;
             if (newName && newName.trim() !== '') data.name = newName;
@@ -671,14 +673,18 @@
                 const cells = rows[r].cells;
                 for(let c=1; c<cells.length; c++) {
                     const dayIdx = c - 1; const periodIdx = r; const cell = cells[c];
-                    const input = cell.querySelector('input'); const btn = cell.querySelector('button');
+                    const input = cell.querySelector('input[type="time"]');
+                    const memo = cell.querySelector('input.memo-input');
+                    const btn = cell.querySelector('button');
                     
+                    const key = `${dayIdx}-${periodIdx}`;
                     if(input.value) { 
-                        const key = `${dayIdx}-${periodIdx}`; 
                         data.scheduleGrid[key] = input.value; 
                     }
+                    if(memo.value) {
+                        data.memoGrid[key] = memo.value;
+                    }
                     if (btn.dataset.exempt === 'true') { 
-                        const key = `${dayIdx}-${periodIdx}`; 
                         data.exemptGrid[key] = true; 
                     }
                 }
