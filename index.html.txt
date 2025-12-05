@@ -1,0 +1,1215 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes">
+    <title>합격랩 퍼펙트 관제 시스템 (v34 Clean Print)</title>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <style>
+        :root {
+            --seat-red: #ff8787;        
+            --seat-green: #69db7c;      
+            --seat-black: #343a40;      
+            --seat-gray: #adb5bd;       
+            --seat-full-exempt: #868e96; 
+            --bg-color: #f0f5f9;        
+            --sidebar-width: 450px;     
+            --table-border: #bac8ff;    
+            --header-bg: #edf2ff;       
+            --btn-primary: #748ffc;
+            
+            /* 파스텔 톤 색상 정의 */
+            --cell-pastel-green: #d3f9d8; /* 입실: 연두색 */
+            --cell-pastel-red: #ffe3e3;   /* 면제: 연분홍색 */
+        }
+
+        body {
+            font-family: 'Pretendard', 'Malgun Gothic', sans-serif;
+            background-color: var(--bg-color);
+            margin: 0; padding: 0; min-height: 100vh;
+            display: flex; flex-direction: column; user-select: none;
+        }
+
+        /* [수정됨] 인쇄 설정: URL 숨김 및 여백 조정 */
+        @media print {
+            @page {
+                size: A4 landscape; /* 가로 방향 */
+                margin: 0;          /* [중요] 브라우저 헤더/푸터(URL) 숨기기 위한 설정 */
+            }
+            body { 
+                -webkit-print-color-adjust: exact !important; 
+                print-color-adjust: exact !important; 
+                background: white !important; 
+                margin: 10mm !important; /* margin:0으로 사라진 여백을 body에서 다시 줌 */
+                padding: 0 !important; 
+            }
+            body > *:not(#schedule-modal) { display: none !important; }
+            
+            #schedule-modal { 
+                display: flex !important; 
+                flex-direction: column;
+                align-items: center;
+                position: static !important; 
+                transform: none !important; 
+                width: 100% !important; 
+                margin: 0 auto !important;
+                background: white !important; 
+                box-shadow: none !important; 
+                padding: 0 !important; 
+                overflow: visible !important; 
+                visibility: visible !important;
+            }
+
+            .schedule-table { width: 100% !important; margin: 0 auto; }
+            
+            /* 숨김 요소 */
+            .modal-footer, .preset-area, .btn-mini-reset, .btn-row-reset, .btn-toggle-exempt, select, input, .info-grid { display: none !important; }
+            .control-help-text { display: none !important; }
+            .schedule-table th:last-child, .schedule-table td:last-child { display: none !important; }
+            
+            /* 출력 요소 표시 */
+            .print-text-span, .print-memo-span, .print-info-span, .print-footer-warning { display: block !important; }
+            .info-grid { border: none !important; background: none !important; padding: 0 !important; margin-bottom: 20px !important; display: block !important;}
+            
+            /* 배경색 강제 출력 */
+            .td-attend { background-color: var(--cell-pastel-green) !important; box-shadow: inset 0 0 0 1000px var(--cell-pastel-green) !important; }
+            .td-exempt { background-color: var(--cell-pastel-red) !important; box-shadow: inset 0 0 0 1000px var(--cell-pastel-red) !important; }
+            
+            .break-row, .break-row td { background-color: #343a40 !important; color: white !important; -webkit-print-color-adjust: exact !important; }
+            .schedule-table th { position: static !important; }
+        }
+
+        /* 캡처 모드 */
+        .capture-mode body > * { visibility: hidden; }
+        .capture-mode #schedule-modal { visibility: visible; position: absolute; left: 0; top: 0; background: white; box-shadow: none; width: 100% !important; margin: 0; transform: none !important;}
+        .capture-mode .modal-footer, .capture-mode .preset-area, .capture-mode .btn-mini-reset, .capture-mode .btn-row-reset, .capture-mode .btn-toggle-exempt, .capture-mode select, .capture-mode input { display: none !important; }
+        .capture-mode .control-help-text { display: none !important; }
+        .capture-mode .schedule-table th:last-child, .capture-mode .schedule-table td:last-child { display: none !important; }
+
+        .print-text-span { display: block; font-weight: bold; font-size: 14px; margin-bottom: 2px; }
+        .print-memo-span { display: block; font-size: 12px; color: #555; }
+        .print-info-span { font-size: 16px; font-weight: bold; color: #333; margin-left: 10px; display: inline-block; border-bottom: 1px solid #000; min-width: 100px;}
+        .print-footer-warning { display: none; text-align: center; color: red; font-weight: bold; margin-top: 20px; font-size: 14px; }
+        .print-mode .print-footer-warning, .capture-mode .print-footer-warning { display: block; }
+
+        /* 셀 배경색 스타일 */
+        .td-attend { background-color: var(--cell-pastel-green); transition: background-color 0.2s; }
+        .td-exempt { background-color: var(--cell-pastel-red); transition: background-color 0.2s; }
+
+        /* 기본 UI */
+        #start-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(40, 50, 60, 0.9); z-index: 9999; display: flex; justify-content: center; align-items: center; flex-direction: column; color: white; cursor: pointer; text-align: center; backdrop-filter: blur(5px); }
+        #start-overlay h1 { font-size: 3rem; margin-bottom: 20px; }
+
+        header { background: white; padding: 10px 20px; border-bottom: 2px solid #e9ecef; display: flex; justify-content: space-between; align-items: center; height: 70px; box-sizing: border-box; }
+        .header-logo img { height: 50px; }
+        .header-clock { font-size: 1.4rem; font-weight: 800; color: #495057; background: #e7f5ff; padding: 8px 25px; border-radius: 30px; color: #1c7ed6; }
+
+        .main-wrapper { display: flex; flex: 1; height: calc(100vh - 70px); overflow: hidden; }
+        .seat-area-container { flex: 1; position: relative; overflow: hidden; background-color: #e9ecef; cursor: grab; touch-action: none; }
+        .seat-area { padding: 60px; display: flex; flex-direction: column; align-items: center; transform-origin: top left; transition: transform 0.1s ease-out; min-height: 100%; background-color: var(--bg-color); width: fit-content; margin: 0 auto; }
+
+        .sidebar { width: var(--sidebar-width); background: white; border-left: 1px solid #dee2e6; display: flex; flex-direction: column; box-shadow: -5px 0 15px rgba(0,0,0,0.03); z-index: 200; }
+        .sidebar-section { display: flex; flex-direction: column; overflow: hidden; }
+        .section-lateness { flex: 2; border-bottom: 2px solid #dee2e6; }
+        .section-special { flex: 1; background-color: #fff9db; } 
+        .sidebar-header { padding: 12px; background: #495057; color: white; font-weight: bold; text-align: center; font-size: 1rem; letter-spacing: 1px; display: flex; justify-content: space-between; align-items: center; }
+        .sidebar-header.special { background: #fab005; color: #343a40; } 
+        .sidebar-content { flex: 1; overflow-y: auto; padding: 10px; }
+
+        .status-table { width: 100%; border-collapse: separate; border-spacing: 0 4px; font-size: 12px; }
+        .status-table th { background: transparent; padding: 5px; color: #868e96; font-weight: 600; text-align: center; }
+        .status-table td { padding: 8px 4px; background: white; border: 1px solid #e9ecef; text-align: center; vertical-align: middle; box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+        .reason-input { width: 90%; border: none; border-bottom: 1px dashed #ccc; text-align: center; font-size: 11px; background: transparent; }
+        .special-form { display: flex; flex-direction: column; gap: 8px; padding: 10px; }
+        .form-row { display: flex; gap: 5px; }
+        .special-input { flex: 1; padding: 6px; border: 1px solid #ced4da; border-radius: 4px; font-size: 12px; }
+        select.special-input { background-color: white; cursor: pointer; }
+        .btn-add-special { background: #343a40; color: white; border: none; padding: 0 12px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+
+        .badge-late { background: var(--seat-red); color: white; padding: 2px 6px; border-radius: 10px; font-weight: bold; font-size: 10px; display: inline-block; }
+        .badge-penalty-text { color: #e03131; font-weight: 900; font-size: 12px; animation: pulse 1s infinite; display: inline-block; margin-right: 3px; }
+
+        .grid-container { display: grid; gap: 8px; justify-content: center; margin-bottom: 40px; padding: 20px; background-color: white; border-radius: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
+        #premium-grid { grid-template-columns: repeat(3, 100px); grid-template-rows: repeat(5, 70px); }
+        #study-grid { grid-template-columns: repeat(10, 80px); grid-template-rows: repeat(16, 60px); }
+
+        .seat {
+            background-color: var(--seat-red); color: white; display: flex; flex-direction: column;
+            justify-content: center; align-items: center; border-radius: 12px; font-weight: bold; font-size: 14px;
+            box-shadow: 0 3px 0 rgba(0,0,0,0.1); cursor: pointer; transition: transform 0.1s, box-shadow 0.1s; position: relative;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.1);
+        }
+        .seat.green { background-color: var(--seat-green); }
+        .seat.black { background-color: var(--seat-black); color: #adb5bd; box-shadow: none; cursor: not-allowed; }
+        .seat.gray-x { background-color: var(--seat-gray); color: #f1f3f5; box-shadow: none; }
+        .seat.gray-all-exempt { background-color: var(--seat-full-exempt); color: white; box-shadow: 0 3px 0 rgba(0,0,0,0.1); }
+        .time-badge { font-size: 10px; background: rgba(0,0,0,0.2); padding: 2px 6px; border-radius: 10px; margin-top: 3px; font-weight: normal; }
+        
+        .seat.flashing { 
+            animation: seat-flash 0.6s infinite ease-in-out !important; 
+            border: 3px solid #e03131 !important; 
+            background-color: var(--seat-red) !important; 
+            color: white !important;
+            z-index: 50; 
+        }
+        @keyframes seat-flash { 0% { background-color: var(--seat-red); transform: scale(1); } 50% { background-color: #ffc9c9; transform: scale(1.05); } 100% { background-color: var(--seat-red); transform: scale(1); } }
+
+        .controls { padding: 20px; text-align: center; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin-top: 30px;}
+        .btn-ctrl { padding: 12px 24px; font-size: 16px; font-weight: bold; cursor: pointer; border-radius: 30px; border: none; color: white; box-shadow: 0 4px 10px rgba(0,0,0,0.1); transition: all 0.2s; }
+        .reset-btn { background-color: var(--seat-green); } .backup-btn { background-color: #4dabf7; } .restore-btn { background-color: #faa2c1; }
+
+        #modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); backdrop-filter: blur(3px); z-index: 2999; }
+        #schedule-modal { display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 35px; border-radius: 25px; width: 95%; max-width: 1250px; max-height: 95vh; overflow-y: auto; z-index: 3000; box-shadow: 0 20px 50px rgba(0,0,0,0.2); border: 1px solid #e9ecef; }
+
+        .info-grid { display: flex; flex-direction: column; gap: 12px; margin-bottom: 25px; padding: 25px; background-color: #f8f9fa; border-radius: 16px; border: 1px solid #e9ecef; }
+        .info-group { display: flex; align-items: center; width: 100%; }
+        .info-group label { width: 140px; font-weight: 700; color: #495057; font-size: 15px; flex-shrink: 0; text-align: left; padding-left: 10px; }
+        .info-group input { flex: 1; padding: 12px 15px; border: 1px solid #dee2e6; border-radius: 8px; font-size: 15px; transition: all 0.2s; background-color: white; }
+        
+        .schedule-table { width: 100%; border-collapse: collapse; text-align: center; font-size: 13px; margin-bottom: 20px; border-style: hidden; }
+        .schedule-table th, .schedule-table td { border: 2px solid var(--table-border); padding: 6px; vertical-align: top; }
+        .schedule-table th { background: var(--header-bg); color: #495057; font-weight: 800; position: sticky; top: 0; z-index: 10; }
+        .schedule-table th:first-child, .schedule-table td:first-child { width: 130px; min-width: 130px; background-color: #dbe4ff; color: #364fc7; font-weight: bold; vertical-align: middle; font-size: 14px; border-right: 3px solid #91a7ff; }
+        
+        .break-row, .break-row td { background-color: #343a40 !important; color: white !important; border: 1px solid #343a40 !important; pointer-events: none; height: 35px; }
+        .break-label { font-size: 14px; font-weight: bold; letter-spacing: 1px; }
+        .break-sub { font-size: 11px; color: #ced4da; font-weight: normal; margin-left: 10px; }
+
+        .schedule-table select { width: 100%; border: 1px solid #dee2e6; padding: 5px; text-align: center; border-radius: 6px; cursor: pointer; margin-bottom: 4px; font-family: inherit; font-weight: bold; background-color: rgba(255,255,255,0.7); -webkit-appearance: menulist; }
+        .schedule-table input.memo-input { width: 100%; border: none; border-bottom: 2px dotted #888; padding: 3px; text-align: center; font-size: 12px; color: #495057; background: transparent; margin-bottom: 5px; }
+        
+        .btn-toggle-exempt { display: block; width: 100%; padding: 4px; font-size: 11px; cursor: pointer; border-radius: 6px; border: 1px solid #dee2e6; background-color: white; color: #868e96; transition: all 0.1s; }
+        .btn-toggle-exempt.active { background-color: #fa5252; color: white; border-color: #fa5252; font-weight: bold; }
+        .btn-mini-reset { margin-top: 4px; padding: 3px 8px; font-size: 11px; background-color: #e9ecef; border: none; border-radius: 12px; cursor: pointer; }
+        .btn-row-reset { width: 100%; height: 100%; background: transparent; border: none; cursor: pointer; color: #e64980; font-weight: bold; font-size: 12px; }
+
+        .zoom-controls { position: absolute; top: 90px; left: 20px; z-index: 1000; display: flex; flex-direction: column; gap: 8px; }
+        .btn-zoom { width: 45px; height: 45px; background: white; color: #333; border: 2px solid #dee2e6; border-radius: 12px; font-size: 24px; font-weight: bold; cursor: pointer; }
+        
+        .action-btn { border: none; padding: 3px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; cursor: pointer; margin: 1px; color: white; }
+        .btn-attend { background-color: #51cf66; } .btn-penalty { background-color: #ff6b6b; }
+        .btn-check { background-color: #adb5bd; } .btn-check.done { background-color: #339af0; }
+        .btn-delete-special { background-color: #fa5252; margin-left: 5px; }
+
+        .preset-area { display: flex; gap: 10px; }
+        .btn-preset { padding: 8px 16px; font-size: 13px; border-radius: 20px; border: none; font-weight: bold; cursor: pointer; color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .btn-high { background-color: #845ef7; } .btn-nsu { background-color: #22b8cf; } 
+        .btn-reset-all { background-color: #ff8787; } .btn-all-exempt { background-color: #fd7e14; }
+        
+        .modal-footer { display: flex; justify-content: space-between; align-items: center; margin-top: 25px; border-top: 2px solid #f1f3f5; padding-top: 20px; }
+        .btn { padding: 12px 25px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; font-size: 14px; }
+        .btn-save { background: #339af0; color: white; } .btn-cancel { background: #e9ecef; color: #495057; }
+        .btn-print { background: #495057; color: white; margin-right: 10px; } .btn-img { background: #20c997; color: white; margin-right: 10px; }
+
+        #file-input { display: none; }
+        .context-menu { display: none; position: absolute; background: white; border: 1px solid #dee2e6; box-shadow: 0 5px 15px rgba(0,0,0,0.1); border-radius: 8px; z-index: 2000; width: 180px; overflow: hidden; }
+        .context-menu li { padding: 12px 15px; cursor: pointer; border-bottom: 1px solid #f1f3f5; list-style: none; font-size: 14px; color: #495057; }
+        .context-menu li:hover { background-color: #f1f3f5; color: #339af0; }
+    </style>
+</head>
+<body>
+    
+    <div id="start-overlay" onclick="startSystem()">
+        <h1>🖱️ 화면을 클릭하세요!</h1>
+        <p>합격랩 관제 시스템 시작하기</p>
+    </div>
+
+    <header>
+        <div class="header-logo">
+            <img src="logo.png" alt="합격LAB 라이브러리" onerror="this.style.display='none'; this.parentElement.innerText='합격LAB 라이브러리';">
+        </div>
+        <div class="header-clock" id="current-clock">00:00:00 (월)</div>
+    </header>
+
+    <div class="zoom-controls">
+        <button class="btn-zoom" onclick="zoomIn()">+</button>
+        <button class="btn-zoom" onclick="zoomOut()">-</button>
+    </div>
+
+    <div class="main-wrapper">
+        <div class="seat-area-container" id="seatContainer">
+            <div class="seat-area" id="seatArea">
+                <h2 style="color:#495057;">프리미엄 존</h2><div id="premium-grid" class="grid-container"></div>
+                <h2 style="color:#495057;">스터디 존</h2><div id="study-grid" class="grid-container"></div>
+                <div class="controls">
+                    <button class="btn-ctrl reset-btn" onclick="resetGreenSeats()">🔄 퇴실 처리</button>
+                    <button class="btn-ctrl backup-btn" onclick="downloadBackup()">💾 데이터 백업</button>
+                    <button class="btn-ctrl restore-btn" onclick="triggerRestore()">📂 백업 불러오기</button>
+                    <input type="file" id="file-input" accept="*/*" onchange="loadBackup(this)">
+                </div>
+            </div>
+        </div>
+        
+        <div class="sidebar">
+            <div class="sidebar-section section-lateness">
+                <div class="sidebar-header">🚨 실시간 지각 관제</div>
+                <div class="sidebar-content">
+                    <table class="status-table">
+                        <thead><tr><th style="width: 20%">이름</th><th style="width: 20%">출석현황</th><th style="width: 25%">지각사유</th><th style="width: 35%">처리현황</th></tr></thead>
+                        <tbody id="status-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="sidebar-section section-special">
+                <div class="sidebar-header special">📌 특이사항 (오늘만 적용)</div>
+                <div class="sidebar-content">
+                    <div class="special-form">
+                        <div class="form-row">
+                            <input type="text" id="sp-name" class="special-input" placeholder="이름 (좌석명)">
+                            <select id="sp-time" class="special-input">
+                                <option value="">시간 선택</option>
+                            </select>
+                        </div>
+                        <div class="form-row">
+                            <input type="text" id="sp-reason" class="special-input" placeholder="사유 (예: 병원)">
+                            <button class="btn-add-special" onclick="addSpecialException()">추가</button>
+                        </div>
+                    </div>
+                    <table class="status-table">
+                        <thead><tr><th>이름</th><th>예정시간</th><th>사유</th><th>삭제</th></tr></thead>
+                        <tbody id="special-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <audio id="alarm-sound" src="합격랩 종소리.MP3" loop></audio>
+
+    <ul id="seat-context-menu" class="context-menu">
+        <li onclick="seatMenuAction('schedule')">📋 개인 시간표 및 정보 설정</li>
+        <li onclick="seatMenuAction('editName')">✏️ 이름만 빠르게 변경</li>
+        <li onclick="seatMenuAction('toggleBlack')">🔒 고정석(검정) 설정/해제</li>
+    </ul>
+
+    <div id="modal-overlay"></div>
+    <div id="schedule-modal">
+        <div class="modal-header">
+            <h2>합격랩 개인시간표</h2>
+            <div class="preset-area">
+                <button class="btn-preset btn-high" onclick="applyPresetHighSchool()">🏫 고등반</button>
+                <button class="btn-preset btn-nsu" onclick="applyPresetNSu()">📚 N수/성인반</button>
+                <button class="btn-preset btn-all-exempt" onclick="setAllExempt()">🚫 전체 입실안함</button>
+                <button class="btn-preset btn-reset-all" onclick="resetAllSchedule()">🔄 전체 초기화</button>
+            </div>
+        </div>
+
+        <div class="info-grid">
+            <div class="info-group"><label>이름</label><input type="text" id="info-name" placeholder="이름 입력"></div>
+            <div class="info-group"><label>이용기간</label><input type="text" id="info-period" placeholder="예: ~12/31"></div>
+            <div class="info-group"><label>좌석 번호</label><input type="text" id="info-seat" placeholder="번호 입력"></div>
+            <div class="info-group"><label>사물함 번호</label><input type="text" id="info-locker" placeholder="번호 입력"></div>
+            <div class="info-group"><label>폰보관함 번호</label><input type="text" id="info-phone" placeholder="번호 입력"></div>
+        </div>
+
+        <p style="text-align:center; font-size:13px; color:#868e96; margin-top:0;" class="control-help-text">
+            빈칸: 기본시간 적용 | <b>[메모]</b>는 인쇄 시 괄호 안에 표시 | <b>[전체 초기화]</b>로 행 단위 삭제 가능
+        </p>
+        <table class="schedule-table">
+            <thead>
+                <tr>
+                    <th>교시</th>
+                    <th>일<br><button class="btn-mini-reset" onclick="resetDaySchedule(0)">초기화</button></th>
+                    <th>월<br><button class="btn-mini-reset" onclick="resetDaySchedule(1)">초기화</button></th>
+                    <th>화<br><button class="btn-mini-reset" onclick="resetDaySchedule(2)">초기화</button></th>
+                    <th>수<br><button class="btn-mini-reset" onclick="resetDaySchedule(3)">초기화</button></th>
+                    <th>목<br><button class="btn-mini-reset" onclick="resetDaySchedule(4)">초기화</button></th>
+                    <th>금<br><button class="btn-mini-reset" onclick="resetDaySchedule(5)">초기화</button></th>
+                    <th>토<br><button class="btn-mini-reset" onclick="resetDaySchedule(6)">초기화</button></th>
+                    <th>전체<br>초기화</th>
+                </tr>
+            </thead>
+            <tbody id="schedule-tbody"></tbody>
+        </table>
+        
+        <div class="print-footer-warning">모든 교시가 시작하기 3분 전까지 착석해주세요.</div>
+
+        <div class="modal-footer">
+            <img src="logo.png" alt="합격LAB" class="modal-logo" onerror="this.style.display='none'">
+            <div class="modal-actions">
+                <button class="btn btn-img" onclick="saveAsImage()">📷 이미지 저장</button>
+                <button class="btn btn-print" onclick="printSchedule()">🖨️ 인쇄</button>
+                <button class="btn btn-save" onclick="saveSchedule()">저장 및 닫기</button>
+                <button class="btn btn-cancel" onclick="closeModal()">취소</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const DAYS = ['일', '월', '화', '수', '목', '금', '토'];
+        const PERIODS = [
+            { name: "1교시", start: "08:00", end: "09:10" }, 
+            { name: "2교시", start: "09:20", end: "10:40" },
+            { name: "3교시", start: "10:50", end: "12:00" }, 
+            { name: "4교시", start: "13:10", end: "14:40" },
+            { name: "5교시", start: "14:50", end: "16:20" }, 
+            { name: "6교시", start: "16:30", end: "18:00" },
+            { name: "7교시", start: "19:10", end: "20:40" }, 
+            { name: "8교시", start: "20:50", end: "22:20" },
+            { name: "9교시", start: "22:30", end: "24:00" }
+        ];
+
+        let seatsData = {}; let selectedSeatId = null; let lastResetTime = ""; 
+        let specialExceptions = []; 
+        let isAlarmPlaying = false;
+        let scale = 1;
+        const container = document.getElementById('seatContainer');
+        const content = document.getElementById('seatArea');
+        let isDragging = false;
+        let startX, startY, scrollLeft, scrollTop;
+
+        window.onload = function() {
+            loadData(); renderSeats(); 
+            initSpecialTimeOptions(); 
+            document.addEventListener('click', () => { document.getElementById('seat-context-menu').style.display = 'none'; });
+            
+            container.addEventListener('mousedown', (e) => {
+                isDragging = true; container.style.cursor = 'grabbing';
+                startX = e.pageX - container.offsetLeft; startY = e.pageY - container.offsetTop;
+                scrollLeft = container.scrollLeft; scrollTop = container.scrollTop;
+            });
+            container.addEventListener('mouseleave', () => { isDragging = false; container.style.cursor = 'grab'; });
+            container.addEventListener('mouseup', () => { isDragging = false; container.style.cursor = 'grab'; });
+            container.addEventListener('mousemove', (e) => {
+                if(!isDragging) return; e.preventDefault();
+                const x = e.pageX - container.offsetLeft; const y = e.pageY - container.offsetTop;
+                const walkX = (x - startX) * 1.5; const walkY = (y - startY) * 1.5;
+                container.scrollLeft = scrollLeft - walkX; container.scrollTop = scrollTop - walkY;
+            });
+            container.addEventListener('touchstart', (e) => {
+                isDragging = true; startX = e.touches[0].pageX - container.offsetLeft;
+                startY = e.touches[0].pageY - container.offsetTop; scrollLeft = container.scrollLeft; scrollTop = container.scrollTop;
+            });
+            container.addEventListener('touchmove', (e) => {
+                if(!isDragging) return;
+                const x = e.touches[0].pageX - container.offsetLeft; const y = e.touches[0].pageY - container.offsetTop;
+                const walkX = (x - startX) * 1.5; const walkY = (y - startY) * 1.5;
+                container.scrollLeft = scrollLeft - walkX; container.scrollTop = scrollTop - walkY;
+            });
+            container.addEventListener('touchend', () => { isDragging = false; });
+        };
+        
+        function zoomIn() { if (scale < 2.0) { scale += 0.1; applyZoom(); } }
+        function zoomOut() { if (scale > 0.5) { scale -= 0.1; applyZoom(); } }
+        function applyZoom() { content.style.transform = `scale(${scale})`; }
+
+        function startSystem() {
+            document.getElementById('start-overlay').style.display = 'none';
+            checkPeriodOnLoad(); setInterval(gameLoop, 1000); document.body.addEventListener('click', stopAlarm);
+        }
+
+        function initSpecialTimeOptions() {
+            const select = document.getElementById('sp-time');
+            let startH = 8; let startM = 0;
+            const endH = 24; const endM = 0;
+            
+            let currentMin = startH * 60 + startM;
+            const endMin = endH * 60 + endM;
+
+            while(currentMin <= endMin) {
+                const h = Math.floor(currentMin / 60);
+                const m = currentMin % 60;
+                if(h > 24) break;
+                
+                const timeStr = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+                const option = document.createElement('option');
+                option.value = timeStr;
+                option.text = timeStr;
+                select.appendChild(option);
+                currentMin += 10;
+            }
+        }
+
+        function loadData() {
+            const v14 = localStorage.getItem('studyRoom_v14_final');
+            if (v14) { seatsData = JSON.parse(v14); } 
+            else { initData('P', 15); initData('S', 160); }
+            const spData = localStorage.getItem('specialExceptions_v1');
+            if (spData) { specialExceptions = JSON.parse(spData); }
+        }
+        function saveData() { 
+            localStorage.setItem('studyRoom_v14_final', JSON.stringify(seatsData));
+            localStorage.setItem('specialExceptions_v1', JSON.stringify(specialExceptions));
+        }
+        function initData(prefix, count) {
+            for (let i = 1; i <= count; i++) {
+                const id = `${prefix}-${i}`;
+                if (!seatsData[id]) { 
+                    seatsData[id] = { 
+                        id: id, name: 'X', state: 0, 
+                        scheduleGrid: {}, memoGrid: {}, scheduleV3: {}, penaltyInfo: null, exemptGrid: {},
+                        info: { period: '', locker: '', phone: '' } 
+                    }; 
+                }
+            }
+        }
+
+        function checkPeriodOnLoad() {
+            const now = new Date();
+            const currentHM = String(now.getHours()).padStart(2,'0') + ":" + String(now.getMinutes()).padStart(2,'0');
+            const todayIdx = now.getDay();
+            let currentPeriodIdx = -1;
+            PERIODS.forEach((p, idx) => { if (currentHM >= p.start) currentPeriodIdx = idx; });
+            const storedLastPeriod = localStorage.getItem('last_active_period');
+            if (currentPeriodIdx !== -1 && String(currentPeriodIdx) !== storedLastPeriod) {
+                checkAndResetSeats(PERIODS[currentPeriodIdx].start, todayIdx, true); 
+                localStorage.setItem('last_active_period', currentPeriodIdx);
+                playAlarm();
+            } else { updateSidebarList(); }
+        }
+
+        function playAlarm() {
+            const audio = document.getElementById('alarm-sound');
+            if (!isAlarmPlaying) { audio.currentTime = 0; audio.play().then(() => { isAlarmPlaying = true; }).catch(e => console.log(e)); }
+        }
+        function stopAlarm() {
+            const audio = document.getElementById('alarm-sound');
+            if (isAlarmPlaying) { audio.pause(); isAlarmPlaying = false; }
+        }
+
+        function renderSeats() { drawGrid('premium-grid', 'P', 15); drawGrid('study-grid', 'S', 160); refreshVisuals(); }
+        function drawGrid(gridId, prefix, count) {
+            const container = document.getElementById(gridId); container.innerHTML = '';
+            for (let i = 1; i <= count; i++) {
+                const id = `${prefix}-${i}`; const div = document.createElement('div');
+                div.className = 'seat'; div.id = id;
+                div.onclick = () => toggleSeat(id); div.oncontextmenu = (e) => showSeatMenu(e, id);
+                div.innerHTML = `<span class="seat-name"></span><span class="time-badge"></span>`;
+                container.appendChild(div);
+            }
+        }
+        
+        function refreshVisuals() {
+            const now = new Date(); const today = now.getDay();
+            const currentHM = String(now.getHours()).padStart(2,'0') + ":" + String(now.getMinutes()).padStart(2,'0');
+
+            for (const id in seatsData) {
+                const data = seatsData[id]; const el = document.getElementById(id);
+                if (!el) continue;
+                el.querySelector('.seat-name').textContent = data.name;
+                
+                const activeSpecial = specialExceptions.find(sp => sp.name === data.name);
+                
+                const todayTimes = (data.scheduleV3 && data.scheduleV3[today]) ? data.scheduleV3[today] : [];
+                const badge = el.querySelector('.time-badge');
+                const configuredCount = todayTimes.length > 0 ? todayTimes.length : 0;
+                badge.style.display = configuredCount > 0 ? 'block' : 'none';
+                badge.textContent = configuredCount > 0 ? `${configuredCount}교시 설정` : '';
+                
+                el.classList.remove('green', 'black', 'gray-x', 'exempt', 'gray-all-exempt', 'flashing');
+                
+                if (activeSpecial) {
+                    if (currentHM < activeSpecial.time) {
+                        el.classList.add('gray-all-exempt');
+                    } else {
+                        el.classList.add('flashing'); 
+                    }
+                    continue; 
+                }
+
+                if (data.state === 3) el.classList.add('black'); 
+                else if (data.state === 1) el.classList.add('green'); 
+                else {
+                    let isAllExempt = true;
+                    for(let d=0; d<7; d++) {
+                        for(let p=0; p<9; p++) {
+                             if (!data.exemptGrid || !data.exemptGrid[`${d}-${p}`]) { isAllExempt = false; break; }
+                        }
+                        if(!isAllExempt) break;
+                    }
+                    if (isAllExempt && data.name !== 'X') el.classList.add('gray-all-exempt');
+                    else if (data.name === 'X') el.classList.add('gray-x');
+                }
+            }
+        }
+        
+        function toggleSeat(id) {
+            const data = seatsData[id]; if (data.state === 3) return;
+            if (data.state === 1) { data.state = 0; } else { data.state = 1; data.penaltyInfo = null; }
+            saveData(); refreshVisuals(); updateSidebarList();
+        }
+        
+        function gameLoop() {
+            const now = new Date();
+            const currentHM = String(now.getHours()).padStart(2,'0') + ":" + String(now.getMinutes()).padStart(2,'0');
+            const todayIdx = now.getDay();
+            document.getElementById('current-clock').textContent = `${now.toLocaleTimeString('ko-KR', { hour12: false })} (${DAYS[todayIdx]})`;
+            
+            updateSidebarList();
+            refreshVisuals();
+            
+            if (currentHM !== lastResetTime) {
+                lastResetTime = currentHM;
+                PERIODS.forEach((p, idx) => { if (p.start === currentHM) localStorage.setItem('last_active_period', idx); });
+                checkAndResetSeats(currentHM, todayIdx, false);
+            }
+        }
+
+        function checkAndResetSeats(time, dayIdx, forceReset) {
+            let changed = false; let triggerAlarm = false;
+            for (const id in seatsData) {
+                const data = seatsData[id];
+                if (data.state === 3 || data.name === 'X') continue;
+                
+                const special = specialExceptions.find(sp => sp.name === data.name);
+                if (special) continue;
+
+                let targetTime = null; let periodIdx = -1;
+                for(let p=0; p<9; p++) {
+                    const key = `${dayIdx}-${p}`;
+                    let scheduledTime = PERIODS[p].start;
+                    if (data.scheduleGrid && data.scheduleGrid[key]) scheduledTime = data.scheduleGrid[key];
+                    if (scheduledTime === time) { targetTime = scheduledTime; periodIdx = p; break; }
+                }
+                if (targetTime) {
+                    const exemptKey = `${dayIdx}-${periodIdx}`;
+                    const isExempt = data.exemptGrid && data.exemptGrid[exemptKey];
+                    if (isExempt) { data.state = 4; } 
+                    else { data.state = 0; triggerAlarm = true; }
+                    data.penaltyInfo = null; changed = true;
+                }
+            }
+            if (changed) { 
+                saveData(); refreshVisuals(); updateSidebarList();
+                if (triggerAlarm && !forceReset) playAlarm(); 
+            }
+        }
+
+        function addSpecialException() {
+            const name = document.getElementById('sp-name').value.trim();
+            const time = document.getElementById('sp-time').value;
+            const reason = document.getElementById('sp-reason').value.trim();
+
+            if (!name || !time) { alert("이름과 시간을 입력해주세요."); return; }
+
+            let seatId = null;
+            for(const id in seatsData) {
+                if(seatsData[id].name === name) { seatId = id; break; }
+            }
+            if(!seatId) {
+                if(!confirm(`'${name}' 이름을 가진 좌석을 찾을 수 없습니다.\n그래도 등록하시겠습니까?`)) return;
+            }
+
+            specialExceptions.push({
+                id: Date.now(),
+                name: name,
+                time: time,
+                reason: reason || "없음",
+                seatId: seatId
+            });
+            
+            document.getElementById('sp-name').value = '';
+            document.getElementById('sp-time').value = '';
+            document.getElementById('sp-reason').value = '';
+            
+            saveData();
+            refreshVisuals(); 
+            updateSidebarList();
+        }
+
+        function removeSpecialException(id) {
+            specialExceptions = specialExceptions.filter(sp => sp.id !== id);
+            saveData();
+            updateSidebarList();
+        }
+
+        function updateSidebarList() {
+            const spTbody = document.getElementById('special-tbody');
+            let spHtml = '';
+            const now = new Date();
+            const currentHM = String(now.getHours()).padStart(2,'0') + ":" + String(now.getMinutes()).padStart(2,'0');
+            const todayIdx = now.getDay();
+
+            const expiredSpecials = [];
+            const activeSpecials = [];
+
+            specialExceptions.forEach(sp => {
+                if (currentHM >= sp.time) {
+                    let periodEnd = null;
+                    for(let p=0; p<9; p++) {
+                        if (sp.time >= PERIODS[p].start && sp.time <= PERIODS[p].end) {
+                            periodEnd = PERIODS[p].end;
+                            break;
+                        }
+                    }
+                    if (!periodEnd) {
+                        for(let p=0; p<9; p++) {
+                            if (sp.time < PERIODS[p].start) {
+                                periodEnd = PERIODS[p].start; 
+                                break;
+                            }
+                        }
+                    }
+
+                    if (periodEnd && currentHM > periodEnd) {
+                        // 만료됨
+                    } else {
+                        expiredSpecials.push(sp); 
+                    }
+                } else {
+                    activeSpecials.push(sp); 
+                    spHtml += `<tr><td>${sp.name}</td><td>${sp.time}</td><td>${sp.reason}</td><td><button class="action-btn btn-delete-special" onclick="removeSpecialException(${sp.id})">삭제</button></td></tr>`;
+                }
+            });
+            
+            const validIds = [...activeSpecials, ...expiredSpecials].map(s => s.id);
+            if (specialExceptions.length !== validIds.length) {
+                specialExceptions = specialExceptions.filter(s => validIds.includes(s.id));
+                saveData();
+            }
+
+            spTbody.innerHTML = spHtml;
+
+            const statusTbody = document.getElementById('status-tbody'); 
+            let html = '';
+            let lateList = [];
+
+            for (const id in seatsData) {
+                const data = seatsData[id];
+                if (data.state === 3 || data.state === 1 || data.state === 4 || data.name === 'X') continue;
+                
+                const hasSpecial = specialExceptions.find(sp => sp.name === data.name);
+                if (hasSpecial) continue;
+
+                let latestMissedTime = null;
+                for(let p=0; p<9; p++) {
+                    const key = `${todayIdx}-${p}`;
+                    const time = data.scheduleGrid && data.scheduleGrid[key] ? data.scheduleGrid[key] : PERIODS[p].start;
+                    if (currentHM >= time) {
+                        const isExempt = data.exemptGrid ? data.exemptGrid[key] : false;
+                        if (!isExempt) { if (!latestMissedTime || time > latestMissedTime) latestMissedTime = time; }
+                    }
+                }
+                
+                if (latestMissedTime) {
+                    lateList.push({
+                        id: id,
+                        name: data.name,
+                        time: latestMissedTime,
+                        reason: data.penaltyInfo && data.penaltyInfo.reason ? data.penaltyInfo.reason : "없음",
+                        penaltyInfo: data.penaltyInfo,
+                        type: 'normal'
+                    });
+                }
+            }
+
+            expiredSpecials.forEach(sp => {
+                const data = seatsData[sp.seatId];
+                if (data) {
+                    lateList.push({
+                        id: sp.seatId,
+                        name: sp.name,
+                        time: sp.time,
+                        reason: sp.reason,
+                        penaltyInfo: data.penaltyInfo,
+                        type: 'special'
+                    });
+                }
+            });
+
+            lateList.forEach(item => {
+                const el = document.getElementById(item.id);
+                const hasPenalty = item.penaltyInfo && item.penaltyInfo.type === 'penalty';
+                const isRecorded = item.penaltyInfo && item.penaltyInfo.recorded;
+                const isNoticed = item.penaltyInfo && item.penaltyInfo.noticed;
+                
+                if (isRecorded && isNoticed) return; 
+
+                if (!hasPenalty && el) {
+                    el.classList.add('flashing');
+                }
+
+                let statusHtml = `<span class="badge-late">지각</span> <span style="font-size:11px; color:#888;">(${item.time})</span>`;
+                let actionHtml = `<button class="action-btn btn-attend" onclick="processAttend('${item.id}')">출석</button><button class="action-btn btn-penalty" onclick="processPenalty('${item.id}', '${item.reason}')">벌점</button>`;
+                let rowStyle = '';
+                let reasonHtml = `<input type="text" class="reason-input" value="${item.reason}" onchange="updatePenaltyReason('${item.id}', this.value)">`;
+
+                if (hasPenalty) {
+                    rowStyle = 'background-color: #fff5f5;';
+                    let recordClass = isRecorded ? 'action-btn btn-check done' : 'action-btn btn-check';
+                    let noticeClass = isNoticed ? 'action-btn btn-check done' : 'action-btn btn-check';
+                    actionHtml = `<span class="badge-penalty-text">벌점</span><button class="${recordClass}" onclick="toggleRecord('${item.id}')">기록</button><button class="${noticeClass}" onclick="toggleNotice('${item.id}')">고지</button>`;
+                }
+
+                html += `<tr style="${rowStyle}">
+                    <td><b>${item.name}</b></td>
+                    <td>${hasPenalty ? '-' : statusHtml}</td>
+                    <td>${reasonHtml}</td>
+                    <td>${actionHtml}</td>
+                </tr>`;
+            });
+
+            statusTbody.innerHTML = html === '' ? '<tr><td colspan="4" style="padding:20px; color:#999;">지각생이 없습니다 🎉</td></tr>' : html;
+        }
+
+        function updatePenaltyReason(id, newReason) {
+            const data = seatsData[id];
+            if (!data.penaltyInfo) data.penaltyInfo = {};
+            data.penaltyInfo.reason = newReason;
+            saveData();
+        }
+
+        function prepareForPrintOrSave() {
+            const infoInputs = document.querySelectorAll('.info-group input');
+            infoInputs.forEach(input => {
+                const span = document.createElement('span');
+                span.className = 'print-info-span';
+                span.innerText = input.value;
+                input.parentNode.appendChild(span);
+                input.style.display = 'none';
+            });
+
+            const rows = document.querySelectorAll('.schedule-data-row');
+            rows.forEach((row, r) => {
+                const cells = row.cells;
+                const pName = row.dataset.pname;
+                const pTime = row.dataset.ptime;
+                cells[0].innerText = `${pName}\n${pTime}`;
+                
+                for(let c=1; c<cells.length; c++) {
+                    if(c > 7) { cells[c].style.display = 'none'; continue; } 
+
+                    const cell = cells[c];
+                    const select = cell.querySelector('select');
+                    const memoInput = cell.querySelector('input.memo-input');
+                    const btn = cell.querySelector('button');
+                    const defaultTime = select ? select.options[0].value : ""; 
+                    
+                    const spanText = document.createElement('span');
+                    spanText.className = 'print-text-span';
+                    const spanMemo = document.createElement('span');
+                    spanMemo.className = 'print-memo-span';
+                    
+                    const memoVal = memoInput.value ? `(${memoInput.value})` : "";
+                    
+                    if (cell.classList.contains('td-exempt')) {
+                        // [수정] 빨간색 칸은 '입실안함' 텍스트 제거하고 빈칸으로 처리
+                        spanText.textContent = ""; 
+                        spanMemo.textContent = memoVal; // 메모는 표시
+                    } else {
+                        // attend (green)
+                        if (select.value && select.value !== defaultTime) {
+                            spanText.textContent = select.value + " 입실";
+                            spanMemo.textContent = memoVal;
+                        } else {
+                            spanText.textContent = ""; 
+                            spanMemo.textContent = memoVal; 
+                        }
+                    }
+                    if(select) select.style.display = 'none';
+                    if(memoInput) memoInput.style.display = 'none';
+                    if(btn) btn.style.display = 'none';
+                    
+                    cell.appendChild(spanText);
+                    cell.appendChild(spanMemo);
+                }
+            });
+            document.body.classList.add('capture-mode');
+            const modal = document.getElementById('schedule-modal');
+            modal.style.width = "1400px"; 
+            modal.style.height = "auto";
+            modal.style.maxHeight = "none";
+            modal.style.overflow = "visible";
+        }
+
+        function cleanupAfterPrintOrSave() {
+            document.body.classList.remove('capture-mode');
+            const spans = document.querySelectorAll('.print-text-span, .print-memo-span, .print-info-span');
+            spans.forEach(span => span.remove());
+            
+            const infoInputs = document.querySelectorAll('.info-group input');
+            infoInputs.forEach(input => input.style.display = '');
+
+            const inputs = document.querySelectorAll('#schedule-tbody input, #schedule-tbody select, #schedule-tbody button');
+            inputs.forEach(el => el.style.display = '');
+            
+            const rows = document.querySelectorAll('.schedule-data-row');
+            rows.forEach((row, r) => {
+                const pName = row.dataset.pname;
+                const pTime = row.dataset.ptime;
+                row.cells[0].innerHTML = `<div style="display:flex; flex-direction:column; justify-content:center; height:100%;">
+                                                <span style="font-size:16px;">${pName}</span>
+                                                <span style="font-size:13px; color:#555; margin-top:4px;">${pTime}</span>
+                                            </div>`;
+                if(row.cells[8]) row.cells[8].style.display = '';
+            });
+            openScheduleModal(selectedSeatId);
+        }
+
+        function saveAsImage() {
+            prepareForPrintOrSave();
+            const modalContent = document.querySelector("#schedule-modal");
+            window.scrollTo(0,0);
+            
+            html2canvas(modalContent, {
+                scale: 2, 
+                useCORS: true, 
+                windowWidth: 1400,
+                backgroundColor: "#ffffff",
+                onclone: (clonedDoc) => {
+                    const clonedModal = clonedDoc.getElementById('schedule-modal');
+                    clonedModal.style.transform = 'none';
+                    clonedModal.style.width = '1400px';
+                }
+            }).then(canvas => {
+                const link = document.createElement("a");
+                document.body.appendChild(link);
+                link.download = `시간표_${document.getElementById('info-name').value}.png`;
+                link.href = canvas.toDataURL();
+                link.target = '_blank';
+                link.click();
+                document.body.removeChild(link);
+                cleanupAfterPrintOrSave();
+            });
+        }
+
+        function printSchedule() {
+            prepareForPrintOrSave();
+            window.print();
+            setTimeout(() => { cleanupAfterPrintOrSave(); }, 1000);
+        }
+
+        function applyPresetHighSchool() {
+            if (!confirm("고등반 프리셋을 적용하시겠습니까?")) return;
+            applyPresetLogic((dayIdx, periodIdx) => (dayIdx >= 1 && dayIdx <= 5 && periodIdx <= 5));
+        }
+        function applyPresetNSu() {
+            if (!confirm("N수/성인반 프리셋을 적용하시겠습니까?")) return;
+            applyPresetLogic((dayIdx, periodIdx) => (dayIdx === 0 && periodIdx >= 3) || (dayIdx >= 1 && periodIdx === 8));
+        }
+        
+        function applyPresetLogic(isExemptFunc) {
+            const rows = document.querySelectorAll('.schedule-data-row');
+            rows.forEach((row) => {
+                const periodIdx = parseInt(row.dataset.period);
+                const cells = row.cells;
+                for(let c=1; c<=7; c++) {
+                    const dayIdx = c - 1;
+                    const cell = cells[c];
+                    const btn = cell.querySelector('button');
+                    const select = cell.querySelector('select');
+                    const defaultTime = PERIODS[periodIdx].start;
+                    const shouldExempt = isExemptFunc(dayIdx, periodIdx);
+                    
+                    if (shouldExempt) {
+                        btn.classList.add('active'); btn.textContent = '입실안함 끄기'; btn.dataset.exempt = 'true';
+                        select.value = defaultTime; 
+                        updateCellColor(cell, true);
+                    } else {
+                        btn.classList.remove('active'); btn.textContent = '입실안함'; btn.dataset.exempt = 'false';
+                        select.value = defaultTime; 
+                        updateCellColor(cell, false);
+                    }
+                }
+            });
+        }
+
+        function setAllExempt() {
+            if(!confirm("모든 교시를 '입실안함'으로 설정하시겠습니까?")) return;
+            const rows = document.querySelectorAll('.schedule-data-row');
+            rows.forEach((row) => {
+                const periodIdx = parseInt(row.dataset.period);
+                const cells = row.cells;
+                for(let c=1; c<=7; c++) {
+                    const cell = cells[c];
+                    const btn = cell.querySelector('button');
+                    const select = cell.querySelector('select');
+                    const memo = cell.querySelector('input.memo-input');
+                    const defaultTime = PERIODS[periodIdx].start;
+                    
+                    if (btn.dataset.exempt === 'false') {
+                         btn.classList.add('active'); btn.textContent = '입실안함 끄기'; btn.dataset.exempt = 'true';
+                         select.value = defaultTime; memo.value = ''; 
+                         updateCellColor(cell, true);
+                    }
+                }
+            });
+        }
+
+        function resetAllSchedule() {
+            if(!confirm("일주일치 시간표를 모두 초기화하시겠습니까?")) return;
+            const rows = document.querySelectorAll('.schedule-data-row');
+            rows.forEach((row, r) => {
+                const periodIdx = parseInt(row.dataset.period);
+                const cells = row.cells;
+                for(let c=1; c<=7; c++) {
+                    const cell = cells[c];
+                    const select = cell.querySelector('select');
+                    const memo = cell.querySelector('input.memo-input');
+                    const btn = cell.querySelector('button');
+                    const defaultTime = PERIODS[periodIdx].start;
+                    
+                    select.value = defaultTime; memo.value = '';
+                    btn.classList.remove('active'); btn.textContent = '입실안함'; btn.dataset.exempt = 'false';
+                    updateCellColor(cell, false);
+                }
+            });
+        }
+
+        function resetDaySchedule(dayIdx) {
+            if(!confirm(`${DAYS[dayIdx]}요일 시간표를 초기화하시겠습니까?`)) return;
+            const rows = document.querySelectorAll('.schedule-data-row');
+            rows.forEach((row, r) => {
+                const periodIdx = parseInt(row.dataset.period);
+                const cell = row.cells[dayIdx + 1];
+                const select = cell.querySelector('select');
+                const memo = cell.querySelector('input.memo-input');
+                const btn = cell.querySelector('button');
+                const defaultTime = PERIODS[periodIdx].start;
+
+                select.value = defaultTime; memo.value = '';
+                btn.classList.remove('active'); btn.textContent = '입실안함'; btn.dataset.exempt = 'false';
+                updateCellColor(cell, false);
+            });
+        }
+
+        function resetPeriodSchedule(periodIdx) {
+            if(!confirm(`${PERIODS[periodIdx].name} 전체 요일을 초기화하시겠습니까?`)) return;
+            const rows = document.querySelectorAll(`.schedule-data-row[data-period="${periodIdx}"]`);
+            if(rows.length > 0) {
+                const row = rows[0];
+                const cells = row.cells;
+                for(let c=1; c<=7; c++) {
+                    const cell = cells[c];
+                    const select = cell.querySelector('select');
+                    const memo = cell.querySelector('input.memo-input');
+                    const btn = cell.querySelector('button');
+                    const defaultTime = PERIODS[periodIdx].start;
+
+                    select.value = defaultTime; memo.value = '';
+                    btn.classList.remove('active'); btn.textContent = '입실안함'; btn.dataset.exempt = 'false';
+                    updateCellColor(cell, false);
+                }
+            }
+        }
+        
+        function createBreakRow(label, time) {
+            const tr = document.createElement('tr');
+            tr.className = 'break-row'; 
+            
+            const tdLabel = document.createElement('td');
+            tdLabel.innerHTML = `<span class="break-label">${label}</span><br><span class="break-sub">${time}</span>`;
+            tr.appendChild(tdLabel);
+            
+            for(let i=0; i<8; i++) {
+                const td = document.createElement('td');
+                tr.appendChild(td);
+            }
+            return tr;
+        }
+
+        function generateTimeOptions(startTime, endTime) {
+            const options = [];
+            let [startH, startM] = startTime.split(':').map(Number);
+            let [endH, endM] = endTime.split(':').map(Number);
+            
+            if (startM % 10 !== 0) {
+                startM = Math.ceil(startM / 10) * 10;
+                if (startM === 60) { startH++; startM = 0; }
+            }
+
+            let currentMinutes = startH * 60 + startM;
+            const endMinutes = endH * 60 + endM;
+            
+            while(currentMinutes <= endMinutes) {
+                const h = Math.floor(currentMinutes / 60);
+                const m = currentMinutes % 60;
+                const timeStr = `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
+                options.push(timeStr);
+                currentMinutes += 10;
+            }
+            return options;
+        }
+
+        function openScheduleModal(id) {
+            const data = seatsData[id]; const tbody = document.getElementById('schedule-tbody'); tbody.innerHTML = '';
+            if(!data.scheduleGrid) data.scheduleGrid = {}; if(!data.exemptGrid) data.exemptGrid = {}; if(!data.memoGrid) data.memoGrid = {}; 
+
+            document.getElementById('info-name').value = data.name === 'X' ? '' : data.name;
+            document.getElementById('info-seat').value = data.name === 'X' ? id : data.name; 
+            if(!data.info) data.info = { period: '', locker: '', phone: '' };
+            document.getElementById('info-period').value = data.info.period;
+            document.getElementById('info-locker').value = data.info.locker;
+            document.getElementById('info-phone').value = data.info.phone;
+
+            PERIODS.forEach((p, idx) => {
+                if(idx === 3) tbody.appendChild(createBreakRow("점심시간", "12:00~13:10"));
+                if(idx === 6) tbody.appendChild(createBreakRow("저녁시간", "18:00~19:10"));
+
+                const tr = document.createElement('tr');
+                tr.className = 'schedule-data-row'; 
+                tr.dataset.period = idx;
+                tr.dataset.pname = p.name;
+                tr.dataset.ptime = `${p.start} ~ ${p.end}`;
+
+                const th = document.createElement('td'); 
+                th.innerHTML = `<div style="display:flex; flex-direction:column; justify-content:center; height:100%;">
+                                    <span style="font-size:16px;">${p.name}</span>
+                                    <span style="font-size:13px; color:#555; margin-top:4px;">${p.start} ~ ${p.end}</span>
+                                </div>`; 
+                th.style.background = '#f1f3f5'; 
+                tr.appendChild(th);
+                
+                const timeOptions = generateTimeOptions(p.start, p.end);
+
+                for(let d=0; d<7; d++) {
+                    const td = document.createElement('td'); const key = `${d}-${idx}`; 
+                    
+                    const select = document.createElement('select');
+                    select.dataset.day = d; select.dataset.period = idx;
+                    
+                    timeOptions.forEach(opt => {
+                        const option = document.createElement('option');
+                        option.value = opt;
+                        option.text = opt;
+                        select.appendChild(option);
+                    });
+
+                    let val = data.scheduleGrid[key] || ""; 
+                    if(!val) val = p.start;
+                    select.value = val;
+                    
+                    const memo = document.createElement('input'); 
+                    memo.type = 'text'; memo.className = 'memo-input'; memo.placeholder = '메모';
+                    memo.value = data.memoGrid[key] || "";
+
+                    const btn = document.createElement('button'); const isExempt = data.exemptGrid[key]; 
+                    btn.className = isExempt ? 'btn-toggle-exempt active' : 'btn-toggle-exempt';
+                    btn.textContent = isExempt ? '입실안함 끄기' : '입실안함';
+                    btn.dataset.exempt = isExempt ? 'true' : 'false';
+                    
+                    // 초기 색상 설정
+                    updateCellColor(td, isExempt);
+
+                    btn.onclick = function() {
+                        if (this.classList.contains('active')) { 
+                            this.classList.remove('active'); this.textContent = '입실안함'; this.dataset.exempt = 'false'; 
+                            select.value = p.start; 
+                            updateCellColor(td, false);
+                        } else { 
+                            this.classList.add('active'); this.textContent = '입실안함 끄기'; this.dataset.exempt = 'true'; 
+                            select.value = p.start; memo.value = ''; 
+                            updateCellColor(td, true);
+                        }
+                    };
+                    
+                    td.appendChild(select); 
+                    td.appendChild(memo); 
+                    td.appendChild(btn); 
+                    tr.appendChild(td);
+                }
+                
+                const tdReset = document.createElement('td');
+                const btnReset = document.createElement('button');
+                btnReset.className = 'btn-row-reset';
+                btnReset.textContent = '초기화';
+                btnReset.onclick = function() { resetPeriodSchedule(idx); };
+                tdReset.appendChild(btnReset);
+                tr.appendChild(tdReset);
+
+                tbody.appendChild(tr);
+            });
+            document.getElementById('modal-overlay').style.display = 'block'; document.getElementById('schedule-modal').style.display = 'block';
+        }
+
+        function saveSchedule() {
+            const data = seatsData[selectedSeatId]; 
+            data.scheduleGrid = {}; data.scheduleV3 = {}; data.exemptGrid = {}; data.memoGrid = {};
+            
+            const newName = document.getElementById('info-name').value;
+            if (newName && newName.trim() !== '') data.name = newName;
+            data.info = {
+                period: document.getElementById('info-period').value,
+                locker: document.getElementById('info-locker').value,
+                phone: document.getElementById('info-phone').value
+            };
+
+            const rows = document.querySelectorAll('.schedule-data-row');
+            rows.forEach((row) => {
+                const periodIdx = parseInt(row.dataset.period);
+                const cells = row.cells;
+                for(let c=1; c<=7; c++) { 
+                    const dayIdx = c - 1; const cell = cells[c];
+                    const select = cell.querySelector('select');
+                    const memo = cell.querySelector('input.memo-input');
+                    const btn = cell.querySelector('button');
+                    
+                    const key = `${dayIdx}-${periodIdx}`;
+                    if(select.value) { data.scheduleGrid[key] = select.value; }
+                    if(memo.value) { data.memoGrid[key] = memo.value; }
+                    if (btn.dataset.exempt === 'true') { data.exemptGrid[key] = true; }
+                }
+            });
+            saveData(); refreshVisuals(); updateSidebarList(); closeModal();
+        }
+
+        function updateCellColor(td, isExempt) {
+            if (isExempt) {
+                td.classList.remove('td-attend');
+                td.classList.add('td-exempt');
+            } else {
+                td.classList.remove('td-exempt');
+                td.classList.add('td-attend');
+            }
+        }
+        
+        function closeModal() { document.getElementById('modal-overlay').style.display = 'none'; document.getElementById('schedule-modal').style.display = 'none'; }
+        function resetGreenSeats() {
+            if (!confirm('출석(초록) 좌석을 모두 퇴실 처리합니까?')) return;
+            for (const id in seatsData) { if (seatsData[id].state === 1) seatsData[id].state = 0; }
+            saveData(); refreshVisuals(); updateSidebarList();
+        }
+        function downloadBackup() {
+            const dataStr = JSON.stringify(seatsData, null, 2); const blob = new Blob([dataStr], { type: "text/plain" });
+            const url = URL.createObjectURL(blob); const a = document.createElement('a'); const date = new Date().toISOString().slice(0,10); 
+            a.href = url; a.download = `합격랩_데이터백업_${date}.txt`; document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+            alert("데이터가 '메모장 파일(.txt)'로 저장되었습니다.\n더블 클릭해서 내용을 확인할 수 있습니다.");
+        }
+        function triggerRestore() { document.getElementById('file-input').click(); }
+        function loadBackup(input) {
+            const file = input.files[0]; if (!file) return; const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const loadedData = JSON.parse(e.target.result);
+                    if (confirm("백업 데이터를 불러오시겠습니까?\n현재 데이터는 덮어씌워집니다.")) {
+                        seatsData = loadedData; 
+                        saveData(); refreshVisuals(); updateSidebarList(); alert("데이터 복구가 완료되었습니다!");
+                    }
+                } catch (err) { alert("잘못된 파일이거나 손상된 데이터입니다.\n올바른 백업 파일(.txt)인지 확인해주세요."); }
+                input.value = ''; 
+            };
+            reader.readAsText(file);
+        }
+        function showSeatMenu(e, id) { e.preventDefault(); selectedSeatId = id; const menu = document.getElementById('seat-context-menu'); menu.style.display = 'block'; menu.style.left = e.pageX + 'px'; menu.style.top = e.pageY + 'px'; }
+        function seatMenuAction(action) {
+            const data = seatsData[selectedSeatId];
+            if (action === 'editName') { const newName = prompt('이름 변경:', data.name); if (newName) data.name = newName; }
+            else if (action === 'toggleBlack') { data.state = (data.state === 3) ? 0 : 3; }
+            else if (action === 'schedule') { openScheduleModal(selectedSeatId); }
+            saveData(); refreshVisuals(); updateSidebarList();
+        }
+        function processAttend(id) { 
+            const data = seatsData[id]; 
+            data.state = 1; 
+            data.penaltyInfo = null; 
+            specialExceptions = specialExceptions.filter(sp => sp.seatId !== id);
+            saveData(); refreshVisuals(); updateSidebarList(); 
+        }
+        function processPenalty(id, reason) { 
+            const data = seatsData[id]; 
+            data.penaltyInfo = { type: 'penalty', recorded: false, noticed: false, reason: reason || "없음" }; 
+            saveData(); refreshVisuals(); updateSidebarList(); 
+        }
+        function toggleRecord(id) { const data = seatsData[id]; if(data.penaltyInfo) { data.penaltyInfo.recorded = !data.penaltyInfo.recorded; checkDone(id); saveData(); updateSidebarList(); } }
+        function toggleNotice(id) { const data = seatsData[id]; if(data.penaltyInfo) { data.penaltyInfo.noticed = !data.penaltyInfo.noticed; checkDone(id); saveData(); updateSidebarList(); } }
+        
+        function checkDone(id) {
+            const data = seatsData[id];
+            if (data.penaltyInfo && data.penaltyInfo.recorded && data.penaltyInfo.noticed) {
+                specialExceptions = specialExceptions.filter(sp => sp.seatId !== id);
+                saveData();
+            }
+        }
+    </script>
+</body>
+</html>
